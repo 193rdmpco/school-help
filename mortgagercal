@@ -1,0 +1,202 @@
+###################################################################################################
+#This script creates a GUI that calculates your wealth over 70 years given:
+#    - Mean Return (%) (above inflation)
+#    - Std Dev Return (%) (volatility)
+#    - Yearly Contribution ($)
+#    - No. of Years of Contribution
+#    - No. of Years to Retirement
+#    - Annual Spend in Retirement
+#######################################################################################################
+#For each calculation, the analysis is run 10 times. For each simulation,
+#the account is updated yearly using one of three formulas:
+#    (1) During contribution years: 
+#            W[i+1] = W[i]*(1 + (r/100) + noise[i]) + Y
+#    (2) After contributions but before retirement:
+#            W[i+1] = W[i]*(1 + (r/100) + noise[i])
+ #   (3) After retirement (withdrawals begin the year after retirement):
+ #           W[i+1] = W[i]*(1 + (r/100) + noise[i]) - S
+#where noise is drawn as:
+#            noise = (sigma/100) * np.random.randn(MAX_YEARS)
+#If the money ever “runs out” (i.e. wealth falls to or below 0), the simulation stops
+#and the plot for that trial ends at that year.
+#The GUI displays the average wealth at retirement (i.e. at the end of the accumulation phase)
+#and produces a plot of wealth vs. year for each of the 10 analyses.
+# FIELDS
+#####################################################################################################
+import tkinter as tk
+from tkinter import messagebox
+import numpy as np
+import matplotlib.pyplot as plt
+
+########################################many.............MANY issues below###############################
+MAX_YEARS = 70
+
+def simulate_wealth(mean_return, std_dev, yearly_contribution,
+                    contribution_years, retirement_year, annual_spend,
+                    max_years=MAX_YEARS):
+
+    wealth = [0.0]  # Start with $0 at year 0
+
+    for i in range(MAX_YEARS - 1):
+        current_wealth = wealth[-1]
+        
+        # noise = (standarddeviation/100)*np.random.randn(MAX_YEARS)
+        noise = (std_dev / 100.0) * np.random.randn()  #ndexError: index 70 is out of bounds for axis 0 with size 70
+        
+        # Cgrowth(1+(r/100)+noise[i])
+        growth = 1 + (mean_return / 100.0) + noise  #TypeError: 'float' object is not subscriptable
+
+        # Determine which phase we are in[1,2 or 3]:
+        if i < contribution_years:
+            
+            # (1) Contributio(years 0 to contribution_years-1)
+            next_wealth = current_wealth * growth + yearly_contribution
+            
+        elif i <= retirement_year:
+            
+            # (2) Growth (contribution to retirement)
+            next_wealth = current_wealth * growth
+            
+        else:
+            # (3) Withdrawal(withdrawals start the year after retirement)
+            next_wealth = current_wealth * growth - annual_spend
+
+        # If wealth falls to or below zero, record it as 0 and stop this trial.
+        if next_wealth <= 0:
+            wealth.append(0)
+            break
+        wealth.append(next_wealth)
+
+    return wealth
+
+#########################CALCULATE BUTTn#######################################################
+
+def calculate_wealth(): #calc button
+ 
+    try:
+        mean_return = float(mean_return_entry.get())
+        std_dev = float(std_dev_entry.get())
+        yearly_contribution = float(yearly_contribution_entry.get())
+        contribution_years = int(contribution_years_entry.get())
+        retirement_year = int(retirement_year_entry.get())
+        annual_spend = float(annual_spend_entry.get())
+    except ValueError:
+        messagebox.showerror("Input Error", "Please enter valid # values.")
+        return
+
+    # checking that incoming doesnt gopast past retirement.
+    if contribution_years > retirement_year:
+        messagebox.showerror("Input Error", "yrs of Contribution cannot exceed Yrs to Retirement.")
+        return
+
+    simulations = []      # store money weath curves
+    retirement_values = []  # store wealt at retirement ##TRIALS
+
+    # Run 10 trial
+    for trial in range(10):
+        sim = simulate_wealth(mean_return, std_dev, yearly_contribution,contribution_years, retirement_year, annual_spend, MAX_YEARS)
+        
+        simulations.append(sim)
+        
+        # Get the wealth at retirement (@ retirement_year)
+        if len(sim) > retirement_year:
+            retirement_values.append(sim[retirement_year])
+        else:
+            retirement_values.append(0.0)
+
+    avg_retirement_wealth = sum(retirement_values) / 10.0
+    result.config(text=f"Wealth at Retirement: ${avg_retirement_wealth:,.2f}")
+
+#######################################PLOTTING ####################################################
+
+    # Create a plot of each simulation
+    plt.figure(figsize=(8, 6))
+    for idx, sim in enumerate(simulations):
+        years = list(range(len(sim)))
+        plt.plot(years, sim, label=f"Trial {idx+1}")
+    plt.xlabel("Year")
+    plt.ylabel("Wealth ($)")
+    plt.title("Wealth vs. Yr for 10 Simulations")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+##################################### GUI #######################################################
+# Title, frame, input fields==>
+#    - Mean Return (%) (above inflation)
+#    - Std Dev Return (%) (volatility)
+#    - Yearly Contribution ($)
+#    - No. of Years of Contribution
+#    - No. of Years to Retirement
+#    - Annual Spend in Retirement
+#    - LABELS
+#    -BUTTONS==> Quit, Calculate
+#################################################################################################
+root = tk.Tk()
+root.title("Wealth Simulation Calculator")
+
+# Input fields frame
+frame_inputs = tk.Frame(root)
+frame_inputs.pack(padx=10, pady=10)
+
+####################################entry feildss#######################################################
+
+# Mean Return (%)
+tk.Label(frame_inputs, text="Mean Return (%)").grid(row=0, column=0, sticky="e", padx=5, pady=5)
+mean_return_entry = tk.Entry(frame_inputs)
+mean_return_entry.grid(row=0, column=1, padx=5, pady=5)
+mean_return_entry.insert(0, "0")  # default value
+
+# Std Dev Return (%)
+tk.Label(frame_inputs, text="Std Dev Return (%)").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+std_dev_entry = tk.Entry(frame_inputs)
+std_dev_entry.grid(row=1, column=1, padx=5, pady=5)
+std_dev_entry.insert(0, "0")  # default value
+
+# Yearly Contribution ($)
+tk.Label(frame_inputs, text="Yearly Contribution ($)").grid(row=2, column=0, sticky="e", padx=5, pady=5)
+yearly_contribution_entry = tk.Entry(frame_inputs)
+yearly_contribution_entry.grid(row=2, column=1, padx=5, pady=5)
+yearly_contribution_entry.insert(0, "0")  # default value
+
+# No. of Years of Contribution
+tk.Label(frame_inputs, text="No. of Years of Contribution").grid(row=3, column=0, sticky="e", padx=5, pady=5)
+contribution_years_entry = tk.Entry(frame_inputs)
+contribution_years_entry.grid(row=3, column=1, padx=5, pady=5)
+contribution_years_entry.insert(0, "0")  # default value
+
+# No. of Years to Retirement
+tk.Label(frame_inputs, text="No. of Years to Retirement").grid(row=4, column=0, sticky="e", padx=5, pady=5)
+retirement_year_entry = tk.Entry(frame_inputs)
+retirement_year_entry.grid(row=4, column=1, padx=5, pady=5)
+retirement_year_entry.insert(0, "0")  # default value
+
+# Annual Spend in Retirement ($)
+tk.Label(frame_inputs, text="Annual Retirement Spend ").grid(row=5, column=0, sticky="e", padx=5, pady=5)
+annual_spend_entry = tk.Entry(frame_inputs)
+annual_spend_entry.grid(row=5, column=1, padx=5, pady=5)
+annual_spend_entry.insert(0, "0")  # default value
+
+##################################################LABELZ BUTTONS QUIT  ############################################
+
+
+# Label to display the average wealth at retirement (not an entry)
+result = tk.Label(root, text="Wealth at Retirement: $0.00", font=("Arial", 12))
+result.pack(pady=10)# pixels above and below the button
+
+# Buttons frame
+fbuttons = tk.Frame(root)
+fbuttons.pack(pady=10)
+
+calcbutton = tk.Button(fbuttons, text="Calculate", width=12, command=calculate_wealth)
+calcbutton.pack(side="left", padx=5)
+
+quit_button = tk.Button(fbuttons, text="Quit", width=12, command=root.destroy)
+quit_button.pack(side="left", padx=5)
+
+###################################################MAIN LOOP######################################################
+
+root.mainloop()
+
